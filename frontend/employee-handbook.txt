@@ -1,0 +1,71 @@
+ACME CORP — WORK FROM HOME & BENEFITS POLICY 2024
+==================================================
+
+SECTION A: WORK FROM HOME (WFH) POLICY
+---------------------------------------
+
+A1. ELIGIBILITY
+All full-time employees who have completed their probation period (90 days) are eligible for WFH.
+Employees on Performance Improvement Plans (PIP) are not eligible for WFH.
+
+A2. WFH ALLOWANCE
+Employees may work from home up to 2 days per week.
+WFH days must be pre-approved by the reporting manager.
+Requests must be submitted at least 24 hours in advance via email or the HR portal.
+
+A3. WFH DURING PROBATION
+Employees in their probation period are required to work from the office 5 days a week.
+Exception: Special approval from HR Head required.
+
+A4. RESPONSIBILITIES WHILE WFH
+Employees must be available on Slack/Teams during standard working hours (9am–6pm).
+Must attend all scheduled meetings via video call.
+Internet connectivity issues do not excuse non-attendance.
+
+SECTION B: COMPENSATION & SALARY
+----------------------------------
+
+B1. SALARY STRUCTURE
+Basic Salary: 40% of CTC
+House Rent Allowance (HRA): 20% of basic salary
+Transport Allowance: Rs. 1,600 per month
+Medical Allowance: Rs. 1,250 per month
+Special Allowance: Balance of CTC
+
+B2. SALARY DISBURSEMENT
+Salaries are credited on the last working day of each month.
+Salary slips are available on the HR portal by the 5th of the following month.
+
+B3. PERFORMANCE APPRAISALS
+Annual appraisals are conducted in April.
+Mid-year performance reviews in October.
+Increment letters are issued in May.
+
+SECTION C: HEALTH & WELLNESS BENEFITS
+----------------------------------------
+
+C1. MEDICAL INSURANCE
+All employees and their immediate family (spouse + 2 children) are covered under group medical insurance.
+Sum insured: Rs. 5,00,000 per family per year.
+Insurance provider: Star Health Insurance.
+Cashless hospitalization available at 5,000+ hospitals across India.
+
+C2. TERM LIFE INSURANCE
+All employees are covered under group term life insurance.
+Coverage: 3x annual CTC (minimum Rs. 25,00,000).
+
+C3. GRATUITY
+Employees are eligible for gratuity after 5 years of continuous service.
+Gratuity = (Last drawn basic salary × 15 × years of service) / 26.
+
+SECTION D: PROFESSIONAL DEVELOPMENT
+--------------------------------------
+
+D1. LEARNING BUDGET
+Each employee receives Rs. 15,000 per year for professional development.
+Can be used for courses, certifications, books, or conferences.
+Reimbursement requires manager approval and invoice submission.
+
+D2. SPONSORED CERTIFICATIONS
+AWS, GCP, Azure, PMP, and other industry certifications are sponsored by the company.
+Employee must serve for at least 1 year post-certification or reimburse the cost.

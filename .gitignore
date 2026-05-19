@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Google secrets
+backend/google_credentials/token.json
+backend/google_credentials/credentials.json
+
+# Vector DB
+backend/chroma_db/
+
+# Node
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# Mac
+.DS_Store

@@ -1,0 +1,25 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Env & secrets — NEVER commit these
+.env
+backend/google_credentials/credentials.json
+backend/google_credentials/token.json
+
+# ChromaDB (local DB — no need to commit)
+backend/chroma_db/
+
+# SQLite session DB
+backend/hr_chat_history.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
