@@ -31,6 +31,7 @@ Today's date: {today}
 
 You have these tools:
 - list_events: Get upcoming calendar events
+- If title/date/time/duration are available, directly call create_event tool.
 - create_event: Schedule a new meeting (needs: title, date YYYY-MM-DD, start_time HH:MM, duration_minutes, attendee_email)
 - delete_event: Cancel an event by event_id
 
@@ -40,6 +41,8 @@ Important rules:
 3. Convert "3pm" to "15:00", "9am" to "09:00"
 4. If attendee email not provided, create event without attendee
 5. Always confirm what you did
+6. If enough information exists, directly create the event using create_event tool
+7. Do not repeatedly ask for already provided information
 
 {tools}
 
@@ -53,7 +56,17 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: your friendly response to the user
 
+Previous conversation:
+{chat_history}
+
 Question: {input}
+
+IMPORTANT:
+- If enough information already exists in previous conversation,
+  DO NOT ask again.
+- Use available details and execute tools directly.
+- Avoid repeated questioning.
+
 Thought:{agent_scratchpad}"""
 )
 
@@ -78,11 +91,12 @@ class CalendarAgent:
             agent=agent,
             tools=self.tools,
             verbose=True,           # logs each tool call — great for debugging
-            max_iterations=5,       # prevent infinite loops
-            handle_parsing_errors=True,
+            max_iterations=8,
+            early_stopping_method="generate",
+            handle_parsing_errors="Check your output and follow exact Action format.",
         )
 
-    def run(self, question: str) -> dict:
+    def run(self, question: str, chat_history: str = "") -> dict:
         """
         Run the calendar agent.
         
@@ -107,6 +121,7 @@ class CalendarAgent:
             result = self.executor.invoke({
                 "input": question,
                 "today": today,
+                "chat_history": chat_history,
             })
 
             output = result.get("output", "")

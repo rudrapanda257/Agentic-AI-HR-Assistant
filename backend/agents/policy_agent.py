@@ -27,9 +27,10 @@ POLICY_PROMPT = PromptTemplate(
 Rules:
 - Be concise and direct
 - If the answer is not in the context, say "I don't have that information in our HR documents. Please contact HR directly."
-- Always cite which document/policy your answer comes from
+- Always cite document name and page number if available
 - Use bullet points for multi-part answers
 - Be friendly and professional
+- If the question is ambiguous, use the most relevant context to make your best guess
 
 --- HR Policy Context ---
 {context}

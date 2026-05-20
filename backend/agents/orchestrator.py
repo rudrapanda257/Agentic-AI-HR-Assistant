@@ -33,6 +33,7 @@ class AgentState(TypedDict):
     session_id: str
     user_message: str
     intent: str           # "policy" | "calendar" | "email" | "unknown"
+    chat_history: str
     response: dict        # final agent response
 
 
@@ -115,12 +116,18 @@ class HROrchestratorGraph:
 
     def _calendar_node(self, state: AgentState) -> AgentState:
         """Node: run the Calendar agent."""
-        result = self.calendar_agent.run(state["user_message"])
+        result = self.calendar_agent.run(
+                 question=state["user_message"],
+                 chat_history=state["chat_history"]
+)
         return {**state, "response": result}
 
     def _email_node(self, state: AgentState) -> AgentState:
         """Node: run the Email agent."""
-        result = self.email_agent.run(state["user_message"])
+        result = self.email_agent.run(
+                 question=state["user_message"],
+                 chat_history=state["chat_history"]
+                )
         return {**state, "response": result}
 
     # ── Router (edge condition) ───────────────────────────────────────────────
@@ -182,6 +189,7 @@ class HROrchestratorGraph:
             "session_id": session_id,
             "user_message": message,
             "intent": "",
+            "chat_history": "",  # can be extended to include past interactions
             "response": {},
         }
 

@@ -40,8 +40,10 @@ Email writing rules:
 5. End with a polite sign-off
 6. If recipient email not mentioned, use a placeholder like "[manager-email@company.com]"
 
-IMPORTANT: For draft requests, ALWAYS use draft_email tool first.
-Never use send_email unless user explicitly says "yes send it" or "confirm send".
+IMPORTANT:
+- If user clearly asks to send an email, directly use send_email tool.
+- If enough details exist (to, subject, body), do NOT ask again.
+- Use draft_email only when information is incomplete.
 
 {tools}
 
@@ -54,7 +56,16 @@ Observation: the result
 Thought: I now know the final answer
 Final Answer: your response to user
 
+Previous conversation:
+{chat_history}
+
 Question: {input}
+
+IMPORTANT:
+- If recipient/subject/body already exists in previous conversation,
+  DO NOT ask again.
+- Use previous details directly.
+
 Thought:{agent_scratchpad}"""
 )
 
@@ -79,11 +90,12 @@ class EmailAgent:
             agent=agent,
             tools=self.tools,
             verbose=True,
-            max_iterations=4,
-            handle_parsing_errors=True,
+            max_iterations=8,
+            early_stopping_method="generate",
+            handle_parsing_errors="Check your output and follow exact Action format.",
         )
 
-    def run(self, question: str) -> dict:
+    def run(self, question: str, chat_history: str = "") -> dict:
         """
         Run the email agent.
         
@@ -101,7 +113,10 @@ class EmailAgent:
             }
         """
         try:
-            result = self.executor.invoke({"input": question})
+            result = self.executor.invoke({
+               "input": question,
+               "chat_history": chat_history,
+            })
             output = result.get("output", "")
             action_card = self._extract_action_card(result)
 
@@ -151,6 +166,8 @@ class EmailAgent:
                     "sent": True,
                     "success": obs_data.get("success", False),
                     "message": obs_data.get("message", ""),
+                    "to": action.tool_input.get("to", ""),
+                    "subject": action.tool_input.get("subject", ""),
                 }
 
         return None
