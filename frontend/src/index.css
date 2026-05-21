@@ -14,6 +14,11 @@
     height: 100vh;
   }
 
+  /* Dark mode body */
+  .dark body {
+    background: #0f1117;
+  }
+
   #root {
     height: 100vh;
     display: flex;
@@ -27,6 +32,10 @@
     scrollbar-color: #d1d5db transparent;
   }
 
+  .dark .chat-scroll {
+    scrollbar-color: #374151 transparent;
+  }
+
   .chat-scroll::-webkit-scrollbar {
     width: 4px;
   }
@@ -34,6 +43,10 @@
   .chat-scroll::-webkit-scrollbar-thumb {
     background: #d1d5db;
     border-radius: 4px;
+  }
+
+  .dark .chat-scroll::-webkit-scrollbar-thumb {
+    background: #374151;
   }
 
   /* Typing indicator animation */
@@ -57,5 +70,10 @@
   @keyframes msg-fade-in {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Dark mode textarea focus ring */
+  .dark textarea:focus {
+    --tw-ring-color: #6259c7;
   }
 }

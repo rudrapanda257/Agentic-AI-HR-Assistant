@@ -1,72 +1,56 @@
 """
-main.py — FastAPI Application.
+main.py — FastAPI Application (Fixed).
 
-Endpoints:
-    GET  /health                    → health check
-    POST /chat                      → main chat endpoint
-    GET  /history/{session_id}      → get chat history
-    POST /confirm-send-email        → actually send the email after user confirms
-    POST /confirm-book-event        → confirm already-created calendar event (noop)
-    DELETE /history/{session_id}    → clear session history
-
-Run with:
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-Docs at: http://localhost:8000/docs
+Key fixes:
+- /confirm-book-event now ACTUALLY creates the Google Calendar event
+  (calendar_agent no longer calls create_event tool — it just builds the card)
+- /confirm-send-email actually sends via Gmail (unchanged, already correct)
+- Added google_credentials_api_key dependency for the actual event creation
 """
 import uuid
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ── Internal imports ──────────────────────────────────────────────────────────
 from config import settings
 from agents.orchestrator import HROrchestratorGraph
 from memory.session_store import init_db, save_message, get_history, get_all_sessions, clear_session
 from mcp_tools.gmail_tools import send_email
+from mcp_tools.calendar_tools import _get_calendar_service   # reuse the helper
 
 
-# ── Lifespan (startup/shutdown) ───────────────────────────────────────────────
+# ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize resources on startup."""
     print("🚀 Starting HR Agent API...")
-
-    # Init SQLite
     init_db()
     print("✅ SQLite initialized")
-
-    # Init orchestrator (loads all models + agents)
     app.state.orchestrator = HROrchestratorGraph()
     print("✅ LangGraph orchestrator ready")
-
     print(f"✅ API running at http://{settings.backend_host}:{settings.backend_port}")
     print("📚 Docs: http://localhost:8000/docs")
-    print("🔍 LangSmith: https://smith.langchain.com")
-    print()
-
-    yield  # App is running
-
+    yield
     print("👋 Shutting down HR Agent API")
 
 
-# ── FastAPI app ───────────────────────────────────────────────────────────────
+# ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="AI HR Assistant API",
     description="Multi-agent HR assistant with RAG + Calendar + Email",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
-# CORS — allow React frontend (localhost:5173) to call the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://localhost:3000",   # CRA dev server (if used)
+        "http://localhost:5173",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -74,27 +58,19 @@ app.add_middleware(
 )
 
 
-# ── Request / Response models ─────────────────────────────────────────────────
+# ── Pydantic models ───────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
-    session_id: str | None = None   # auto-generated if not provided
+    session_id: str | None = None
     message: str
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "user_123",
-                "message": "How many casual leaves do I get?"
-            }
-        }
 
 
 class ChatResponse(BaseModel):
     session_id: str
     answer: str
-    agent: str               # "policy" | "calendar" | "email"
+    agent: str
     intent: str
-    sources: list = []       # citation chips for policy answers
-    action_card: dict | None = None   # confirmation card for calendar/email
+    sources: list = []
+    action_card: dict | None = None
 
 
 class SendEmailRequest(BaseModel):
@@ -102,53 +78,40 @@ class SendEmailRequest(BaseModel):
     subject: str
     body: str
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "to": "manager@company.com",
-                "subject": "WFH Request — Friday",
-                "body": "Hi, I'd like to request WFH on Friday..."
-            }
-        }
+
+class BookEventRequest(BaseModel):
+    """
+    Sent from the React UI when user clicks Create Event.
+    The UI may have edited the fields before submitting.
+    """
+    title: str
+    date: str            # YYYY-MM-DD
+    start_time: str      # HH:MM
+    duration_minutes: int = 30
+    attendee_email: Optional[str] = None
+    description: Optional[str] = ""
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health_check():
-    """Quick health check — use this to verify the API is running."""
-    return {
-        "status": "ok",
-        "service": "HR Agent API",
-        "version": "1.0.0",
-    }
+    return {"status": "ok", "service": "HR Agent API", "version": "1.1.0"}
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Main chat endpoint.
-    
-    Send a message, get back an answer from the appropriate agent.
-    session_id is auto-generated if not provided — return it to the client
-    and include it in subsequent requests to maintain conversation context.
-    """
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    # Generate session ID if not provided
     session_id = request.session_id or str(uuid.uuid4())
-
-    # Save user message
     save_message(session_id, "user", request.message)
 
-    # Run orchestrator
     try:
         orchestrator: HROrchestratorGraph = app.state.orchestrator
         result = orchestrator.run(session_id, request.message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
-    # Save assistant response
     save_message(
         session_id,
         "assistant",
@@ -172,21 +135,18 @@ async def chat(request: ChatRequest):
 
 @app.get("/history/{session_id}")
 async def get_chat_history(session_id: str, limit: int = 50):
-    """Get chat history for a session."""
     messages = get_history(session_id, limit=limit)
     return {"session_id": session_id, "messages": messages, "count": len(messages)}
 
 
 @app.delete("/history/{session_id}")
 async def clear_chat_history(session_id: str):
-    """Clear all messages for a session (start fresh)."""
     clear_session(session_id)
     return {"message": f"Session {session_id} cleared."}
 
 
 @app.get("/sessions")
 async def list_sessions():
-    """Admin: list all chat sessions."""
     sessions = get_all_sessions()
     return {"sessions": sessions, "count": len(sessions)}
 
@@ -194,10 +154,7 @@ async def list_sessions():
 @app.post("/confirm-send-email")
 async def confirm_send_email(request: SendEmailRequest):
     """
-    Actually send an email after user confirms in the React UI.
-    
-    The email agent only drafts — this endpoint does the actual send.
-    This is the ONLY place where send_email tool is called for real.
+    Actually send the email via Gmail API after user clicks Send in the UI.
     """
     try:
         result_json = send_email.invoke({
@@ -210,24 +167,68 @@ async def confirm_send_email(request: SendEmailRequest):
         if result.get("success"):
             return {"success": True, "message": f"Email sent to {request.to}"}
         else:
-            raise HTTPException(status_code=500, detail=result.get("error", "Send failed"))
-
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "Send failed"),
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/confirm-book-event")
-async def confirm_book_event(event_data: dict):
+async def confirm_book_event(request: BookEventRequest):
     """
-    Acknowledge calendar event booking.
-    
-    The calendar agent already books the event immediately via create_event tool.
-    This endpoint exists so the React UI can show a "booked" confirmation state.
+    Actually create the Google Calendar event after user clicks Create in UI.
+    Accepts the (possibly edited) event data from the React UI.
     """
-    return {"success": True, "message": "Event confirmed.", "event": event_data}
+    try:
+        service = _get_calendar_service()
+
+        start_dt = datetime.strptime(
+            f"{request.date} {request.start_time}", "%Y-%m-%d %H:%M"
+        )
+        end_dt = start_dt + timedelta(minutes=request.duration_minutes)
+
+        event_body = {
+            "summary": request.title,
+            "description": request.description or "",
+            "start": {
+                "dateTime": start_dt.isoformat(),
+                "timeZone": "Asia/Kolkata",
+            },
+            "end": {
+                "dateTime": end_dt.isoformat(),
+                "timeZone": "Asia/Kolkata",
+            },
+        }
+
+        if request.attendee_email and request.attendee_email.strip():
+            event_body["attendees"] = [{"email": request.attendee_email.strip()}]
+
+        event = service.events().insert(
+            calendarId="primary",
+            body=event_body,
+            sendUpdates="all" if request.attendee_email else "none",
+        ).execute()
+
+        return {
+            "success": True,
+            "event_id": event["id"],
+            "html_link": event.get("htmlLink", ""),
+            "message": f"Event '{request.title}' created in Google Calendar.",
+            "title": request.title,
+            "date": request.date,
+            "start_time": request.start_time,
+            "duration_minutes": request.duration_minutes,
+            "attendee_email": request.attendee_email or "",
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Calendar error: {str(e)}")
 
 
-# ── Dev runner ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

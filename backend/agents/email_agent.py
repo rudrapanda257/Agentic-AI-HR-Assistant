@@ -1,15 +1,11 @@
 """
-email_agent.py — Gmail Email Agent.
+email_agent.py — Gmail Email Agent (Fixed).
 
-Flow:
-    User says "send email to X about Y"
-        → agent drafts a professional email using LLM
-        → returns draft as action_card (does NOT send yet)
-        → user sees preview card in React UI
-        → user clicks "Send" → /confirm-send-email endpoint actually sends
-
-Safety pattern: draft_email tool just returns the content.
-Actual sending via send_email only happens from confirm endpoint.
+Key fixes:
+- Removed early_stopping_method="generate" (unsupported)  
+- Agent ALWAYS uses draft_email first — never send_email directly
+- action_card includes pending=True so UI shows Edit+Send buttons
+- Actual send only happens when user clicks Send in the UI
 """
 import sys
 import json
@@ -25,55 +21,58 @@ from mcp_tools.gmail_tools import GMAIL_TOOLS
 
 
 EMAIL_SYSTEM_PROMPT = PromptTemplate.from_template(
-    """You are an HR Email Assistant. Help employees draft and send professional emails.
+    """You are an HR Email Assistant. Help employees draft professional emails.
 
-You have these tools:
-- list_emails: Check recent inbox emails
-- draft_email: Compose an email draft (to, subject, body) — does NOT send, shows preview to user
-- send_email: Send an email (only use when user explicitly confirms)
+TOOLS available:
+- list_emails: Check recent inbox emails (input: {{"max_results": 5}})
+- draft_email: Compose a draft (to, subject, body) — does NOT send
+- send_email: Send immediately (ONLY use if user explicitly says "send now" or "confirm send")
 
-Email writing rules:
-1. Always write professional, concise emails
-2. For HR-related emails (leave requests, WFH, etc.), use formal but friendly tone
-3. Keep emails under 150 words unless detailed explanation needed
-4. Use "I" not "we" for personal emails
-5. End with a polite sign-off
-6. If recipient email not mentioned, use a placeholder like "[manager-email@company.com]"
+EMAIL WRITING RULES:
+1. Write professional, concise emails (under 150 words)
+2. For HR topics (leave, WFH, appraisal etc.) use formal but friendly tone
+3. Use "I" not "we" for personal requests
+4. End with a polite sign-off (e.g., "Best regards, [Your Name]")
+5. If recipient email is missing, use a placeholder like "[manager@company.com]"
+6. Always include a clear subject line
+7. Never leave the subject or body blank or omit them from the action input
 
-IMPORTANT:
-- If user clearly asks to send an email, directly use send_email tool.
-- If enough details exist (to, subject, body), do NOT ask again.
-- Use draft_email only when information is incomplete.
+IMPORTANT — ALWAYS use draft_email tool first unless user explicitly confirms sending.
+The draft_email Action Input MUST be:
+{{"to": "email@example.com", "subject": "Subject here", "body": "Full email body here"}}
+
+If the user asks to compose an email, you MUST provide all three fields.
+If you do not know the exact recipient address, use "[manager@company.com]".
 
 {tools}
 
-Use this exact format:
-Question: the input question you must answer
-Thought: your reasoning
-Action: the action to take, must be one of [{tool_names}]
-Action Input: the input as a JSON object
-Observation: the result
+FORMAT — use EXACTLY this format:
+Question: the input question
+Thought: reasoning  
+Action: one of [{tool_names}]
+Action Input: valid JSON object
+Observation: result
 Thought: I now know the final answer
-Final Answer: your response to user
+Final Answer: friendly response to user
 
-Previous conversation:
+Previous conversation context:
 {chat_history}
 
 Question: {input}
-
-IMPORTANT:
-- If recipient/subject/body already exists in previous conversation,
-  DO NOT ask again.
-- Use previous details directly.
-
 Thought:{agent_scratchpad}"""
 )
 
 
 class EmailAgent:
     """
-    ReAct agent for email drafting and sending.
-    Returns action_card with draft details for React UI preview.
+    ReAct agent for email drafting.
+    
+    Flow:
+      1. Agent calls draft_email → returns draft data
+      2. _extract_action_card builds action_card with pending=True
+      3. React UI shows Edit + Send buttons
+      4. User can edit inline, then clicks Send
+      5. /confirm-send-email endpoint does the actual Gmail send
     """
 
     def __init__(self):
@@ -90,32 +89,15 @@ class EmailAgent:
             agent=agent,
             tools=self.tools,
             verbose=True,
-            max_iterations=8,
-            early_stopping_method="generate",
-            handle_parsing_errors="Check your output and follow exact Action format.",
+            max_iterations=5,
+            handle_parsing_errors="Check your output. Use exact format: Action: tool_name, Action Input: valid JSON",
         )
 
     def run(self, question: str, chat_history: str = "") -> dict:
-        """
-        Run the email agent.
-        
-        Returns:
-            {
-                "answer": "Here's your draft email. Review and click Send when ready.",
-                "agent": "email",
-                "action_card": {
-                    "type": "email",
-                    "to": "manager@company.com",
-                    "subject": "WFH Request — Friday 23 May",
-                    "body": "Hi ...",
-                    "ready_to_send": true
-                }
-            }
-        """
         try:
             result = self.executor.invoke({
-               "input": question,
-               "chat_history": chat_history,
+                "input": question,
+                "chat_history": chat_history,
             })
             output = result.get("output", "")
             action_card = self._extract_action_card(result)
@@ -127,16 +109,19 @@ class EmailAgent:
             }
 
         except Exception as e:
+            message = str(e)
+            if "draft_emailSchema" in message or ("subject" in message and "body" in message):
+                message = (
+                    "I couldn't compose the draft because the email subject or body was missing. "
+                    "Please ask me to draft an email with a recipient, a subject, and a full message body."
+                )
             return {
-                "answer": f"I had trouble composing the email: {str(e)}. Please try again.",
+                "answer": f"I had trouble composing the email: {message}. Please try again.",
                 "agent": "email",
                 "action_card": None,
             }
 
     def _extract_action_card(self, result: dict) -> dict | None:
-        """
-        Extract draft details from tool call steps → build action_card for UI.
-        """
         intermediate = result.get("intermediate_steps", [])
         for action, observation in intermediate:
             if action.tool == "draft_email":
@@ -149,6 +134,7 @@ class EmailAgent:
 
                 return {
                     "type": "email",
+                    "pending": True,   # <-- user must click Send
                     "to": tool_input.get("to", ""),
                     "subject": tool_input.get("subject", ""),
                     "body": tool_input.get("body", obs_data.get("body", "")),
@@ -171,17 +157,3 @@ class EmailAgent:
                 }
 
         return None
-
-
-# ── Quick test ───────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    agent = EmailAgent()
-
-    print("Test: Draft WFH email")
-    r = agent.run("Draft an email to my manager requesting work from home on Friday")
-    print(r["answer"])
-    if r.get("action_card"):
-        card = r["action_card"]
-        print(f"\nTo: {card['to']}")
-        print(f"Subject: {card['subject']}")
-        print(f"Body:\n{card['body']}")
