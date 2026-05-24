@@ -16,7 +16,7 @@ load_dotenv(dotenv_path=env_path)
 class Settings(BaseSettings):
     # ── Gemini Flask API ────────────────────────────────────────────────────
     gemini_api_url: str = "http://localhost:5000/generate"
-    gemini_timeout: int = 30  # seconds
+    gemini_timeout: int = 120  # seconds
 
     # ── LangSmith ──────────────────────────────────────────────────────────
     langchain_tracing_v2: str = "true"

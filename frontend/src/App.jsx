@@ -19,6 +19,21 @@ export default function App() {
 
   const handleSend = async () => {
     const text = inputText.trim()
+
+    const lowerText = text.toLowerCase().trim()
+   if (['create', 'send', 'confirm', 'yes', 'ok'].includes(lowerText)) {
+  setInputText('')
+  // Add a hint message instead
+  setMessages?.(prev => [...prev, {
+    id: crypto.randomUUID(),
+    role: 'assistant', 
+    content: 'Please use the Create/Send button in the card above to confirm.',
+    agent: 'policy', sources: [], action_card: null,
+    timestamp: new Date().toISOString()
+  }])
+  return
+  }
+  
     if (!text || isLoading) return
     setInputText('')
     await sendMessage(text)

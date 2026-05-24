@@ -33,6 +33,21 @@ export function useChat() {
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return
 
+    const CONFIRM_WORDS = ['create', 'send', 'confirm', 'yes', 'ok', 'book']
+if (CONFIRM_WORDS.includes(text.trim().toLowerCase())) {
+  setMessages(prev => [...prev, {
+    id: uuidv4(), role: 'user', content: text.trim(),
+    agent: '', sources: [], action_card: null,
+    timestamp: new Date().toISOString(),
+  }, {
+    id: uuidv4(), role: 'assistant',
+    content: '👆 Please use the **Create** or **Send** button in the card above — don\'t type it in the chat.',
+    agent: 'policy', sources: [], action_card: null,
+    timestamp: new Date().toISOString(),
+  }])
+  return
+}
+
     setError(null)
 
     // Add user message immediately
